@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  website:
+    build: .
+    stdin_open: true
+    tty: true
+    links: 
+      - db
+    ports: 
+      - "5000:5000"
+
+  db:
+    image: mysql:latest
+    restart: always
+    container_name: db
+    environment: 
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "30000:3306"
+      
