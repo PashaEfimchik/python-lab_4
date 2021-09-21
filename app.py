@@ -1,4 +1,3 @@
-from website.models import *
 from website.routes import app
 
 
