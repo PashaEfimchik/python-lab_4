@@ -19,6 +19,7 @@ pyRFC3339==1.1
 pysha3==1.0.2
 pytest==6.2.5
 python-socketio==5.4.0
+python-dotenv==0.19.0
 PyYAML==5.3.1
 requests==2.23.0
 requests-unixsocket==0.2.0
