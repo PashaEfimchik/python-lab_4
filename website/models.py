@@ -20,10 +20,16 @@ class Users(db.Model):
     user_post = db.relationship("Posts", backref="users", lazy='dynamic')
 
     def __init__(self, username, email, password):
-        self.username = username 
+        self.username = username
         self.email = email
         self.password = password
-        
+
+    def get_id(self):
+        return self.id
+
+    def is_active(self):
+        return True
+
     def __repr__(self):
         return '<User {}>'.format(self.username)
 
@@ -36,12 +42,11 @@ class Posts(db.Model):
     user_id = db.Column(db.Integer, ForeignKey('users.id'), nullable=False)
     u_post = db.relationship('Users', secondary=relations_table)
 
-    def __init__(self,post_time, title, content, user_id, u_post):
+    def __init__(self,post_time, title, content, user_id):
         self.post_time = post_time
-        self.title = title 
+        self.title = title
         self.content = content
-        self.parent_id = user_id
-        self.u_post = u_post
+        self.user_id = user_id
     def __repr__(self):
        return f"Post('{self.title}', '{self.post_time}')"
 
