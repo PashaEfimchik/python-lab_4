@@ -1,18 +1,32 @@
 from website.models import Users, Posts, PostForm
 from website import create_app
+from flask_cors import CORS
+import asyncio
 from flask import render_template, request, session, redirect, url_for, flash
 from passlib.hash import sha256_crypt
 from website import db
-from flask_login import login_user
+from flask_login import login_user, current_user
 from flask_toastr import Toastr
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
-#logging.basicConfig(filename='app.log', level=logging.INFO,
-#                    format='%(levelname)s:%(message)s')
+logging.basicConfig(filename='app.log', level=logging.INFO,
+                    format='%(levelname)s:%(message)s')
 
 app = create_app("config.MyConfig")
-
+loop = asyncio.new_event_loop()
+#CORS(app)
 toastr = Toastr(app)
+
+async def add_session(register_user):
+    db.session.add(register_user)            
+    db.session.commit()
+
+async def log_session(User):
+    login_user(User)
+
+executor = ThreadPoolExecutor()
+
 
 @app.route('/')
 def index():
@@ -20,7 +34,7 @@ def index():
     all_posts = db.session.query(Posts.post_time, Posts.title, Posts.content, Users.username).join(Posts)\
         .order_by(Posts.post_time.desc()).paginate(page=page, per_page=3)
     session.permanent = True
-
+    
     if "username" not in session:
         logging.info('Unknow user connected')
         return render_template('index.html', status="disabled", posts=all_posts)
@@ -29,7 +43,7 @@ def index():
         logging.info('User {} connected'.format(username))
         flash("You are already logged in as %s" % username)
         return render_template('index.html', posts=all_posts)
-
+    
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
@@ -44,9 +58,9 @@ def search():
             logging.info('Post not found by user - {}'.format(username))
             flash("There is no post by  %s" % username)
             return redirect(url_for('index'))
-
-
-
+    
+  
+    
 @app.route('/register', methods= ["POST", "GET"])
 def register():
     if "username" in session:
@@ -67,13 +81,17 @@ def register():
                 flash("The email or username already is being used please choose a different one or login if your an existing user")
                 return redirect(url_for("register", status="disabled"))
             register_user = Users(email = email, username = username, password = hashed)
-            db.session.add(register_user)
-            db.session.commit()
+            
+            executor.submit(add_session, register_user)
+            # loop.run_until_complete(add_session(register_user))
+
             session["username"] = username
             flash("You have logged in as %s" % username)
             logging.info('Register user - {}'.format(username))
             return redirect(url_for('members', usr=username))
         return render_template('register.html', status="disabled")
+
+
 
 
 @app.route('/login', methods= ["POST", "GET"])
@@ -91,28 +109,29 @@ def login():
             if username == '' or password == '':
                 flash("Please enter all input fields!")
                 return redirect(url_for("login", status="disabled"))
-            if db.session.query(Users.id).filter_by(username = username).first():
+            if db.session.query(Users.id).filter_by(username = username).scalar():
                 if db.session.query(Users.id).filter_by(password = hashed):
                     db.session.query(Users.id)
                     session["username"] = username
-                    db_user = Users.query.filter_by(username=username).first()
-                    login_user(db_user)
-                    flash("You have logged in as %s" % username)
+                    User = Users.query.filter_by(username=username).first()
+                    executor.submit(log_session, User)
+                    flash("You have logged in as %s" % username)                    
                     return redirect(url_for('members'))
                 flash("Password is incorect please try again")
                 return redirect(url_for("login", status="disabled"))
             flash("Username or password is incorect please try again or register!")
             logging.info('Login user - {}'.format(username))
             return redirect(url_for("login", status="disabled"))
-
+        
         return render_template('login.html', status="disabled")
+
 
 @app.route('/user/', methods= ["POST", "GET"])
 def members():
     if "username" in session:
         username = session["username"]
         page = request.args.get('page', 1, type=int)
-
+        
         user_id = db.session.query(Users.id).filter_by(username = username).scalar()
         user_posts = db.session.query(Posts).filter_by(user_id=user_id)\
             .order_by(Posts.post_time.desc()).paginate(page=page, per_page=3)
@@ -122,9 +141,8 @@ def members():
 
         if request.method == "POST":
             post = Posts(post_time=form.post_time ,title=title, content=content, user_id=user_id)
-            db.session.add(post)
-            db.session.commit()
-            flash("Your post was sucesfully submited")
+            executor.submit(add_session, post)
+            flash("Your post was sucesfully submited")            
             return redirect(url_for('members', form=form, posts=user_posts))
         return render_template('members.html', form=form, posts=user_posts)
     else:
@@ -138,8 +156,7 @@ def edit_post(id):
     form = PostForm(obj=post)
     if request.method == "POST":
         form.populate_obj(post)
-        db.session.add(post)
-        db.session.commit()
+        executor.submit(add_session, post)
         flash("The post has been updatet")
         logging.info('The post - {} - has been updatet'.format(post))
         return redirect(url_for('members'))
@@ -169,7 +186,7 @@ def logout():
         logging.info('User - {} - successfully logged out'.format("username"))
         resp = app.make_response(render_template('login.html', status="disabled"))
         resp.set_cookie('token', expires=0)
-        return resp
+        return resp 
     else:
         flash("You have been already logged out")
         return redirect(url_for("login.html"))
