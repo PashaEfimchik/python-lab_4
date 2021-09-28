@@ -15,7 +15,7 @@ logging.basicConfig(filename='app.log', level=logging.INFO,
 
 app = create_app("config.MyConfig")
 loop = asyncio.new_event_loop()
-#CORS(app)
+
 toastr = Toastr(app)
 
 async def add_session(register_user):
